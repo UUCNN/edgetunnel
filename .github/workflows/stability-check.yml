@@ -31,6 +31,7 @@ jobs:
         run: |
           node --check worker-entry.js
           node --check _worker.js
+          node --check scripts/health-smoke.mjs
 
       - name: Validate and bundle with pinned Wrangler
         run: npx --yes wrangler@4.131.1 deploy --dry-run --outdir .wrangler-check
@@ -43,28 +44,7 @@ jobs:
           test "${bundle_bytes}" -le 1048576
 
       - name: Exercise health endpoint
-        run: |
-          node --input-type=module <<'NODE'
-          const { default: worker } = await import('./worker-entry.js');
-          const base = 'https://example.com';
-
-          const getResponse = await worker.fetch(new Request(`${base}/__health`), {}, {});
-          if (getResponse.status !== 200) throw new Error(`GET /__health returned ${getResponse.status}`);
-          if ((getResponse.headers.get('content-type') || '').toLowerCase().includes('application/json') === false) throw new Error('Health response is not JSON');
-          if (!(getResponse.headers.get('x-request-id') || '').trim()) throw new Error('Health response is missing X-Request-Id');
-          const getBody = await getResponse.json();
-          if (getBody.ok !== true || getBody.service !== 'edgetunnel') throw new Error('Health response body is invalid');
-
-          const headResponse = await worker.fetch(new Request(`${base}/__health`, { method: 'HEAD' }), {}, {});
-          if (headResponse.status !== 200) throw new Error(`HEAD /__health returned ${headResponse.status}`);
-          if (!(headResponse.headers.get('x-request-id') || '').trim()) throw new Error('HEAD health response is missing X-Request-Id');
-
-          const postResponse = await worker.fetch(new Request(`${base}/__health`, { method: 'POST' }), {}, {});
-          if (postResponse.status !== 405) throw new Error(`POST /__health returned ${postResponse.status}`);
-          if (postResponse.headers.get('allow') !== 'GET, HEAD') throw new Error('Health Allow header is invalid');
-
-          console.log('Health endpoint smoke test passed');
-          NODE
+        run: node scripts/health-smoke.mjs
 
       - name: Check Worker startup
         run: npx --yes wrangler@4.131.1 check startup
